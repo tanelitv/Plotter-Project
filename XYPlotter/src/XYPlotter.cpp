@@ -100,8 +100,8 @@ static void DrawTask(void *pvParameters) {
 	vTaskDelay(1000);
 
 	LimitSwitchStatus = stepper.getLimitSwitchStatus();
-	while (*LimitSwitchStatus == false && *(LimitSwitchStatus + 1) == false && 		//Start calibration when all limit switches are open
-           *(LimitSwitchStatus + 1) == false && *(LimitSwitchStatus + 1) == false) {
+	while (LimitSwitchStatus[0] == false && LimitSwitchStatus[1] == false && 		//Start calibration when all limit switches are open
+			LimitSwitchStatus[2] == false && LimitSwitchStatus[3] == false) {
 		LimitSwitchStatus = stepper.getLimitSwitchStatus();
 		vTaskDelay(100);
 	}
@@ -109,42 +109,50 @@ static void DrawTask(void *pvParameters) {
 
 	while (1) {
 		xQueueReceive(q_cmd, &cmd, portMAX_DELAY);
-
-		if (cmd.type == COMMAND_MOVE) {
-			stepper.move((int) (stepper.getSPMM()*cmd.x - stepper.getX()),
-						 (int) (stepper.getSPMM()*cmd.y - stepper.getY()));
-
-		} else if (cmd.type == COMMAND_PEN) {
+		switch (cmd.type) {
+		case COMMAND_MOVE:
+			stepper.move((int)(stepper.getSPMM()*cmd.x - stepper.getX()),
+			(int)(stepper.getSPMM()*cmd.y - stepper.getY()));
+			break;
+		case COMMAND_PEN:
 			if (cmd.penvalue == pen.getPenDownValue()) {
 				pen.Draw();
-			} else if (cmd.penvalue == pen.getPenUpValue()) {
+			}
+			else if (cmd.penvalue == pen.getPenUpValue()) {
 				pen.Stop();
 			}
-		} else if (cmd.type == COMMAND_SAVEPEN) {
+			break;
+		case COMMAND_SAVEPEN:
 			pen.setPenDownValue(cmd.penDOWN);
 			pen.setPenUpValue(cmd.penUP);
-		} else if (cmd.type == COMMAND_LASER) {
-				laser.setVal(cmd.laservalue);
-				vTaskDelay(250);
-		} else if (cmd.type == COMMAND_ORIGIN) {
-			stepper.move(((int)0 - stepper.getX()), (int) (0 - stepper.getY()));
-
-
-		} else if (cmd.type == COMMAND_SET_DIR_AND_AREA_SPEED) {
+			break;
+		case COMMAND_LASER:
+			laser.setVal(cmd.laservalue);
+			vTaskDelay(250);
+			break;
+		case COMMAND_ORIGIN:
+			stepper.move(((int)0 - stepper.getX()), (int)(0 - stepper.getY()));
+			break;
+		case COMMAND_SET_DIR_AND_AREA_SPEED:
 			stepper.setWidth(cmd.width);
 			stepper.setHeight(cmd.height);
 			stepper.calibrate();
-		} else if (cmd.type == COMMAND_LSQUERY) {
+			break;
+		case COMMAND_LSQUERY:
 			LimitSwitchStatus = stepper.getLimitSwitchStatus();
-			sprintf(msg, "M11 %d %d %d %d\r\n", *LimitSwitchStatus,*(LimitSwitchStatus+1),
-												*(LimitSwitchStatus+2), *(LimitSwitchStatus+3));
+			sprintf(msg, "M11 %d %d %d %d\r\n", *LimitSwitchStatus, *(LimitSwitchStatus + 1),
+				*(LimitSwitchStatus + 2), *(LimitSwitchStatus + 3));
 			USB_send((uint8_t *)msg, strlen(msg));
-		} else if (cmd.type == COMMAND_START) {
+			break;
+		case COMMAND_START:
 			sprintf(msg, "M10 XY %d %d 0.00 0.00 A0 B0 H0 S80 U%d D%d\r\n",
-					      stepper.getWidth(), stepper.getHeight(),
-						  pen.getPenUpValue(), pen.getPenDownValue());
+				stepper.getWidth(), stepper.getHeight(),
+				pen.getPenUpValue(), pen.getPenDownValue());
 			USB_send((uint8_t *)msg, strlen(msg));
 			startLimSwitchCheck();
+			break;
+		default:
+			break;
 		}
 		USB_send((uint8_t *)OK, strlen(OK));
 		vTaskDelay(10);
